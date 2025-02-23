@@ -1,0 +1,13 @@
+.{
+    .name = "tween",
+    .version = "0.0.0",
+    .minimum_zig_version = "0.14.0-dev.3268+0cf6ae290",
+    .dependencies = .{},
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "LICENSE",
+        "README.md",
+    },
+}
