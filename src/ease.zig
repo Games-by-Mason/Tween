@@ -382,11 +382,6 @@ test backInOut {
 }
 
 pub const ElasticOptions = struct {
-    /// Higher values result in more bounces.
-    w: f32 = 20.0,
-};
-
-pub const ElasticOptions2 = struct {
     /// If less than one, overshoots before arriving. Less than one has no effect.
     amplitude: f32 = 1.0,
     /// The period of the oscillation.
@@ -396,7 +391,7 @@ pub const ElasticOptions2 = struct {
 /// Elastic easing.
 ///
 /// One of Robert Penner's widely used elastic easing function.
-pub fn elasticIn(t: anytype, opt: ElasticOptions2) @TypeOf(t) {
+pub fn elasticIn(t: anytype, opt: ElasticOptions) @TypeOf(t) {
     if (t >= 1.0) return 1.0;
     if (t <= 0.0) return 0.0;
 
@@ -423,7 +418,7 @@ test elasticIn {
 }
 
 /// See `elasticIn`.
-pub fn elasticOut(t: anytype, opt: ElasticOptions2) @TypeOf(t) {
+pub fn elasticOut(t: anytype, opt: ElasticOptions) @TypeOf(t) {
     return reverse(elasticIn, t, .{opt});
 }
 
@@ -436,7 +431,7 @@ test elasticOut {
 }
 
 /// Elastic ease in followed by elastic ease out.
-pub fn elasticInOut(t: anytype, opt: ElasticOptions2) @TypeOf(t) {
+pub fn elasticInOut(t: anytype, opt: ElasticOptions) @TypeOf(t) {
     return mirror(elasticIn, t, .{opt});
 }
 
