@@ -40,7 +40,28 @@ If you're unfamiliar with this class of functions, I recommend viewing [The Simp
 
 ## Ease
 
-Most popular easing styles are supported, including the widely used easing styles popularized by [Robert Penner](http://robertpenner.com/easing/). [easings.net] is a good reference for most of these, but keep in mind that the implementations may vary.
+The following easing functions are supported, most of these originated with [Robert Penner](http://robertpenner.com/easing/):
+
+* linear
+* [sine](https://easings.net/#easeInSine)
+* [quad](https://easings.net/#easeInQuad)
+* [cubic](https://easings.net/#easeInCubic)
+* [quart](https://easings.net/#easeInQuart)
+* [quint](https://easings.net/#easeInQuint)
+* [exp](https://easings.net/#easeInExpo)
+* [circ](https://easings.net/#easeInCirc)
+* [back](https://easings.net/#easeInBack)
+* [elastic](https://easings.net/#easeInElastic)
+* [bounce](https://easings.net/#easeInBounce)
+* step
+* [smoothstep](https://en.wikipedia.org/wiki/Smoothstep)
+* [smootherstep](https://en.wikipedia.org/wiki/Smoothstep#Variations)
+
+I've opted to not include GIFs demonstrating the easing styles here, as [easings.net](https://easings.net) already has a great visualizer for almost all of these.
+
+(Note that the links above are provided for convenient reference, the actual implementations may not be 100% identical or may have slightly different parameters.)
+
+In, out, and in-out variations of each are provided, functions are exact at 0 and 1 for 32 bit floats unless otherwise noted.
 
 Easing functions operate on the `t` value given to `lerp`. For example:
 ```zig
