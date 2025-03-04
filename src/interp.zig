@@ -9,12 +9,27 @@ const assert = std.debug.assert;
 ///
 /// Supports floats, vectors of floats, and structs or arrays that only contain other supported
 /// types.
-pub fn lerp(start: anytype, end: anytype, t: anytype) @TypeOf(start, end) {
-    comptime assert(@typeInfo(@TypeOf(t)) == .float or @typeInfo(@TypeOf(t)) == .comptime_float);
-    const Type = @TypeOf(start, end);
+pub fn lerp(
+    start: anytype,
+    end: anytype,
+    t: anytype,
+) switch (@typeInfo(@TypeOf(start, end))) {
+    .float, .comptime_float => @TypeOf(start, end, t),
+    else => @TypeOf(start, end),
+} {
+    // See https://github.com/ziglang/zig/issues/23075
+    const Type = switch (@typeInfo(@TypeOf(start, end))) {
+        .float, .comptime_float => @TypeOf(start, end, t),
+        else => @TypeOf(start, end),
+    };
     switch (@typeInfo(Type)) {
         .float, .comptime_float => return @mulAdd(Type, start, 1.0 - t, end * t),
-        .vector => return @mulAdd(Type, start, @splat(1.0 - t), end * @as(Type, @splat(t))),
+        .vector => return @mulAdd(
+            Type,
+            start,
+            @splat(1.0 - t),
+            @as(Type, end) * @as(Type, @splat(@floatCast(t))),
+        ),
         .@"struct" => |info| {
             var result: Type = undefined;
             inline for (info.fields) |field| {
@@ -38,20 +53,72 @@ pub fn lerp(start: anytype, end: anytype, t: anytype) @TypeOf(start, end) {
 }
 
 test lerp {
-    // Floats
+    const expectEqual = std.testing.expectEqual;
+    const ct = comptime_float;
+
+    // Float values
     {
-        try std.testing.expectEqual(100.0, lerp(100.0, 200.0, 0.0));
-        try std.testing.expectEqual(200.0, lerp(100.0, 200.0, 1.0));
-        try std.testing.expectEqual(150.0, lerp(100.0, 200.0, 0.5));
+        try expectEqual(100.0, lerp(100.0, 200.0, 0.0));
+        try expectEqual(200.0, lerp(100.0, 200.0, 1.0));
+        try expectEqual(150.0, lerp(100.0, 200.0, @as(f32, 0.5)));
+    }
+
+    // Float types
+    {
+        try expectEqual(@as(f32, 0), lerp(@as(f32, 0), @as(f32, 0), @as(f32, 0)));
+
+        try expectEqual(@as(f64, 0), lerp(@as(f64, 0), @as(f32, 0), @as(f32, 0)));
+        try expectEqual(@as(f64, 0), lerp(@as(f32, 0), @as(f64, 0), @as(f32, 0)));
+        try expectEqual(@as(f64, 0), lerp(@as(f32, 0), @as(f32, 0), @as(f64, 0)));
+
+        try expectEqual(@as(f64, 0), lerp(@as(f64, 0), @as(f64, 0), @as(f32, 0)));
+        try expectEqual(@as(f64, 0), lerp(@as(f64, 0), @as(f32, 0), @as(f64, 0)));
+        try expectEqual(@as(f64, 0), lerp(@as(f32, 0), @as(f64, 0), @as(f64, 0)));
+
+        try expectEqual(@as(f64, 0), lerp(@as(f64, 0), @as(f64, 0), @as(f64, 0)));
+    }
+
+    // Comptime float types
+    {
+        try expectEqual(@as(f32, 0), lerp(@as(f32, 0), @as(f32, 0), @as(f32, 0)));
+
+        try expectEqual(@as(f32, 0), lerp(@as(ct, 0), @as(f32, 0), @as(f32, 0)));
+        try expectEqual(@as(f32, 0), lerp(@as(f32, 0), @as(ct, 0), @as(f32, 0)));
+        try expectEqual(@as(f32, 0), lerp(@as(f32, 0), @as(f32, 0), @as(ct, 0)));
+
+        try expectEqual(@as(f32, 0), lerp(@as(ct, 0), @as(ct, 0), @as(f32, 0)));
+        try expectEqual(@as(f32, 0), lerp(@as(ct, 0), @as(f32, 0), @as(ct, 0)));
+        try expectEqual(@as(f32, 0), lerp(@as(f32, 0), @as(ct, 0), @as(ct, 0)));
+
+        try expectEqual(@as(ct, 0), lerp(@as(ct, 0), @as(ct, 0), @as(ct, 0)));
     }
 
     // Vectors
     {
         const a: @Vector(3, f32) = .{ 0.0, 50.0, 100.0 };
         const b: @Vector(3, f32) = .{ 100.0, 0.0, 200.0 };
-        try std.testing.expectEqual(@Vector(3, f32){ 0.0, 50.0, 100.0 }, lerp(a, b, 0.0));
-        try std.testing.expectEqual(@Vector(3, f32){ 50.0, 25.0, 150.0 }, lerp(a, b, 0.5));
-        try std.testing.expectEqual(@Vector(3, f32){ 100.0, 0.0, 200.0 }, lerp(a, b, 1.0));
+        try expectEqual(@Vector(3, f32){ 0.0, 50.0, 100.0 }, lerp(a, b, @as(ct, 0.0)));
+        try expectEqual(@Vector(3, f32){ 50.0, 25.0, 150.0 }, lerp(a, b, @as(f32, 0.5)));
+        try expectEqual(@Vector(3, f32){ 100.0, 0.0, 200.0 }, lerp(a, b, @as(f32, 1)));
+    }
+
+    // Vector types
+    {
+        try expectEqual(@Vector(3, f32), @TypeOf(lerp(
+            @Vector(3, f32){ 0.0, 0.0, 0.0 },
+            @Vector(3, f32){ 0.0, 0.0, 0.0 },
+            @as(f32, 0.0),
+        )));
+        try expectEqual(@Vector(3, f32), @TypeOf(lerp(
+            .{ 0.0, 0.0, 0.0 },
+            @Vector(3, f32){ 0.0, 0.0, 0.0 },
+            @as(f32, 0.0),
+        )));
+        try expectEqual(@Vector(3, f32), @TypeOf(lerp(
+            @Vector(3, f32){ 0.0, 0.0, 0.0 },
+            .{ 0.0, 0.0, 0.0 },
+            @as(f32, 0.0),
+        )));
     }
 
     // Structs
@@ -64,13 +131,22 @@ test lerp {
         try std.testing.expectEqual(Vec3{ .x = 100.0, .y = 0.0, .z = 200.0 }, lerp(a, b, 1.0));
     }
 
+    // Tuples
+    {
+        const a = .{ 0.0, 50.0, 100.0 };
+        const b = .{ 100.0, 0.0, 200.0 };
+        try std.testing.expectEqual(.{ 0.0, 50.0, 100.0 }, lerp(a, b, 0.0));
+        try std.testing.expectEqual(.{ 50.0, 25.0, 150.0 }, lerp(a, b, 0.5));
+        try std.testing.expectEqual(.{ 100.0, 0.0, 200.0 }, lerp(a, b, 1.0));
+    }
+
     // Array
     {
-        const a: [3]f32 = .{ 0.0, 50.0, 100.0 };
-        const b: [3]f32 = .{ 100.0, 0.0, 200.0 };
-        try std.testing.expectEqual([3]f32{ 0.0, 50.0, 100.0 }, lerp(a, b, 0.0));
-        try std.testing.expectEqual([3]f32{ 50.0, 25.0, 150.0 }, lerp(a, b, 0.5));
-        try std.testing.expectEqual([3]f32{ 100.0, 0.0, 200.0 }, lerp(a, b, 1.0));
+        const a: [3]f32 = .{ 0, 50, 100 };
+        const b: [3]f32 = .{ 100, 0, 200 };
+        try expectEqual([3]f32{ 0, 50, 100 }, lerp(a, b, @as(ct, 0)));
+        try expectEqual([3]f32{ 50, 25, 150 }, lerp(a, b, @as(f32, 0.5)));
+        try expectEqual([3]f32{ 100, 0, 200 }, lerp(a, b, @as(f32, 1)));
     }
 }
 
