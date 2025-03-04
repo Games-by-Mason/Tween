@@ -1,5 +1,6 @@
 .{
-    .name = "tween",
+    .name = .tween,
+    .fingerprint = 0xc004f341948175c6,
     .version = "0.0.0",
     .minimum_zig_version = "0.14.0-dev.3268+0cf6ae290",
     .dependencies = .{},
