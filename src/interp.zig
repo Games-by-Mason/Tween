@@ -5,11 +5,58 @@ const geom = @import("root.zig");
 
 const assert = std.debug.assert;
 
+/// Returns the type returned by `lerp`.
+pub fn Lerp(StartEnd: type, T: type) type {
+    switch (@typeInfo(StartEnd)) {
+        // XXX: any way to avoid this? or if we're doing it commit to it for the others too? maybe in
+        // this case should really be peer type resolution on all three, otherwise on just the two
+        .float, .comptime_float => return @TypeOf(@as(StartEnd, 0), @as(T, 0.0)),
+        else => return StartEnd,
+    }
+
+    // Or maybe put in return tyupe diretly
+    switch (@typeInfo(StartEnd)) {
+        .float, .comptime_float => return @TypeOf(Start, End, T),
+        else => return @TypeOf(@as(Start, undefined), End),
+    }
+}
+
+test Lerp {
+    try std.testing.expectEqual(f32, Lerp(f32, f32));
+
+    try std.testing.expectEqual(f64, Lerp(f32, f64));
+    try std.testing.expectEqual(f64, Lerp(f64, f32));
+    try std.testing.expectEqual(f64, Lerp(f64, f64));
+
+    try std.testing.expectEqual(f32, Lerp(comptime_float, f32));
+    try std.testing.expectEqual(f32, Lerp(f32, comptime_float));
+    try std.testing.expectEqual(comptime_float, Lerp(comptime_float, comptime_float));
+
+    const Vec3 = @Vector(3, f32);
+    try std.testing.expectEqual(Vec3, Lerp(Vec3, f32));
+    try std.testing.expectEqual(Vec3, Lerp(Vec3, comptime_float));
+    try std.testing.expectEqual(Vec3, Lerp(Vec3, f64));
+
+    const Quat = struct { xy: f32, xz: f32, yz: f32, a: f32 };
+    try std.testing.expectEqual(Quat, Lerp(Quat, f32));
+    try std.testing.expectEqual(Quat, Lerp(Quat, comptime_float));
+    try std.testing.expectEqual(Quat, Lerp(Quat, f64));
+
+    const Ar = [3]f32;
+    try std.testing.expectEqual(Ar, Lerp(Ar, f32));
+    try std.testing.expectEqual(Ar, Lerp(Ar, comptime_float));
+    try std.testing.expectEqual(Ar, Lerp(Ar, f64));
+}
+
 /// Linear interpolation, exact results at `0` and `1`.
 ///
 /// Supports floats, vectors of floats, and structs or arrays that only contain other supported
 /// types.
-pub fn lerp(start: anytype, end: anytype, t: anytype) @TypeOf(start, end) {
+pub fn lerp(
+    start: anytype,
+    end: anytype,
+    t: anytype,
+) Lerp(@TypeOf(start, end), @TypeOf(t)) {
     comptime assert(@typeInfo(@TypeOf(t)) == .float or @typeInfo(@TypeOf(t)) == .comptime_float);
     const Type = @TypeOf(start, end);
     switch (@typeInfo(Type)) {
@@ -40,9 +87,10 @@ pub fn lerp(start: anytype, end: anytype, t: anytype) @TypeOf(start, end) {
 test lerp {
     // Floats
     {
+        try std.testing.expectEqual(f32, @TypeOf(@as(comptime_float, 1.0), @as(f32, 1.0)));
         try std.testing.expectEqual(100.0, lerp(100.0, 200.0, 0.0));
         try std.testing.expectEqual(200.0, lerp(100.0, 200.0, 1.0));
-        try std.testing.expectEqual(150.0, lerp(100.0, 200.0, 0.5));
+        try std.testing.expectEqual(150.0, lerp(100.0, 200.0, @as(f32, 0.5)));
     }
 
     // Vectors
@@ -51,7 +99,7 @@ test lerp {
         const b: @Vector(3, f32) = .{ 100.0, 0.0, 200.0 };
         try std.testing.expectEqual(@Vector(3, f32){ 0.0, 50.0, 100.0 }, lerp(a, b, 0.0));
         try std.testing.expectEqual(@Vector(3, f32){ 50.0, 25.0, 150.0 }, lerp(a, b, 0.5));
-        try std.testing.expectEqual(@Vector(3, f32){ 100.0, 0.0, 200.0 }, lerp(a, b, 1.0));
+        try std.testing.expectEqual(@Vector(3, f32){ 100.0, 0.0, 200.0 }, lerp(a, b, @as(f32, 1)));
     }
 
     // Structs
