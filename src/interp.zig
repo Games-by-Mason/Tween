@@ -5,23 +5,36 @@ const geom = @import("root.zig");
 
 const assert = std.debug.assert;
 
+/// Coerce to a float type if possible.
+fn PreferFloats(T: type) type {
+    switch (@typeInfo(T)) {
+        .float, .comptime_float => return T,
+        .comptime_int => return comptime_float,
+        else => return T,
+    }
+}
+
+/// The type returned by `lerp`.
+fn Lerp(Start: type, End: type, T: type) type {
+    const start: PreferFloats(Start) = undefined;
+    const end: PreferFloats(End) = undefined;
+    const t: PreferFloats(T) = undefined;
+    switch (@typeInfo(@TypeOf(start, end))) {
+        .float, .comptime_float => return @TypeOf(start, end, t),
+        else => return @TypeOf(start, end),
+    }
+}
+
 /// Linear interpolation, exact results at `0` and `1`.
 ///
 /// Supports floats, vectors of floats, and structs or arrays that only contain other supported
-/// types.
+/// types. Comptime ints are coerced to comptime floats.
 pub fn lerp(
     start: anytype,
     end: anytype,
     t: anytype,
-) switch (@typeInfo(@TypeOf(start, end))) {
-    .float, .comptime_float => @TypeOf(start, end, t),
-    else => @TypeOf(start, end),
-} {
-    // See https://github.com/ziglang/zig/issues/23075
-    const Type = switch (@typeInfo(@TypeOf(start, end))) {
-        .float, .comptime_float => @TypeOf(start, end, t),
-        else => @TypeOf(start, end),
-    };
+) Lerp(@TypeOf(start), @TypeOf(end), @TypeOf(t)) {
+    const Type = Lerp(@TypeOf(start), @TypeOf(end), @TypeOf(t));
     switch (@typeInfo(Type)) {
         .float, .comptime_float => return @mulAdd(Type, start, 1.0 - t, end * t),
         .vector => return @mulAdd(
@@ -54,7 +67,8 @@ pub fn lerp(
 
 test lerp {
     const expectEqual = std.testing.expectEqual;
-    const ct = comptime_float;
+    const ctf = comptime_float;
+    const cti = comptime_int;
 
     // Float values
     {
@@ -82,26 +96,41 @@ test lerp {
     {
         try expectEqual(@as(f32, 0), lerp(@as(f32, 0), @as(f32, 0), @as(f32, 0)));
 
-        try expectEqual(@as(f32, 0), lerp(@as(ct, 0), @as(f32, 0), @as(f32, 0)));
-        try expectEqual(@as(f32, 0), lerp(@as(f32, 0), @as(ct, 0), @as(f32, 0)));
-        try expectEqual(@as(f32, 0), lerp(@as(f32, 0), @as(f32, 0), @as(ct, 0)));
+        try expectEqual(@as(f32, 0), lerp(@as(ctf, 0), @as(f32, 0), @as(f32, 0)));
+        try expectEqual(@as(f32, 0), lerp(@as(f32, 0), @as(ctf, 0), @as(f32, 0)));
+        try expectEqual(@as(f32, 0), lerp(@as(f32, 0), @as(f32, 0), @as(ctf, 0)));
 
-        try expectEqual(@as(f32, 0), lerp(@as(ct, 0), @as(ct, 0), @as(f32, 0)));
-        try expectEqual(@as(f32, 0), lerp(@as(ct, 0), @as(f32, 0), @as(ct, 0)));
-        try expectEqual(@as(f32, 0), lerp(@as(f32, 0), @as(ct, 0), @as(ct, 0)));
+        try expectEqual(@as(f32, 0), lerp(@as(ctf, 0), @as(ctf, 0), @as(f32, 0)));
+        try expectEqual(@as(f32, 0), lerp(@as(ctf, 0), @as(f32, 0), @as(ctf, 0)));
+        try expectEqual(@as(f32, 0), lerp(@as(f32, 0), @as(ctf, 0), @as(ctf, 0)));
 
-        try expectEqual(@as(ct, 0), lerp(@as(ct, 0), @as(ct, 0), @as(ct, 0)));
+        try expectEqual(@as(ctf, 0), lerp(@as(ctf, 0), @as(ctf, 0), @as(ctf, 0)));
+    }
+
+    // Comptime int types
+    {
+        try expectEqual(@as(f32, 0), lerp(@as(f32, 0), @as(f32, 0), @as(f32, 0)));
+
+        try expectEqual(@as(f32, 0), lerp(@as(cti, 0), @as(f32, 0), @as(f32, 0)));
+        try expectEqual(@as(f32, 0), lerp(@as(f32, 0), @as(cti, 0), @as(f32, 0)));
+        try expectEqual(@as(f32, 0), lerp(@as(f32, 0), @as(f32, 0), @as(cti, 0)));
+
+        try expectEqual(@as(f32, 0), lerp(@as(cti, 0), @as(cti, 0), @as(f32, 0)));
+        try expectEqual(@as(f32, 0), lerp(@as(cti, 0), @as(f32, 0), @as(cti, 0)));
+        try expectEqual(@as(f32, 0), lerp(@as(f32, 0), @as(cti, 0), @as(cti, 0)));
+
+        try expectEqual(@as(cti, 0), lerp(@as(cti, 0), @as(cti, 0), @as(cti, 0)));
     }
 
     // Vectors, and checking for lack of clamping
     {
         const a: @Vector(3, f32) = .{ 0.0, 50.0, 100.0 };
         const b: @Vector(3, f32) = .{ 100.0, 0.0, 200.0 };
-        try expectEqual(@Vector(3, f32){ -100.0, 100.0, 0.0 }, lerp(a, b, @as(ct, -1.0)));
-        try expectEqual(@Vector(3, f32){ 0.0, 50.0, 100.0 }, lerp(a, b, @as(ct, 0.0)));
+        try expectEqual(@Vector(3, f32){ -100.0, 100.0, 0.0 }, lerp(a, b, @as(ctf, -1.0)));
+        try expectEqual(@Vector(3, f32){ 0.0, 50.0, 100.0 }, lerp(a, b, @as(ctf, 0.0)));
         try expectEqual(@Vector(3, f32){ 50.0, 25.0, 150.0 }, lerp(a, b, @as(f32, 0.5)));
         try expectEqual(@Vector(3, f32){ 100.0, 0.0, 200.0 }, lerp(a, b, @as(f32, 1)));
-        try expectEqual(@Vector(3, f32){ 200.0, -50.0, 300.0 }, lerp(a, b, @as(ct, 2.0)));
+        try expectEqual(@Vector(3, f32){ 200.0, -50.0, 300.0 }, lerp(a, b, @as(ctf, 2.0)));
     }
 
     // Vector types
@@ -146,7 +175,7 @@ test lerp {
     {
         const a: [3]f32 = .{ 0, 50, 100 };
         const b: [3]f32 = .{ 100, 0, 200 };
-        try expectEqual([3]f32{ 0, 50, 100 }, lerp(a, b, @as(ct, 0)));
+        try expectEqual([3]f32{ 0, 50, 100 }, lerp(a, b, @as(ctf, 0)));
         try expectEqual([3]f32{ 50, 25, 150 }, lerp(a, b, @as(f32, 0.5)));
         try expectEqual([3]f32{ 100, 0, 200 }, lerp(a, b, @as(f32, 1)));
     }
@@ -163,23 +192,35 @@ pub fn lerpClamped(
 
 test lerpClamped {
     const expectEqual = std.testing.expectEqual;
-    const ct = comptime_float;
+    const ctf = comptime_float;
     const a: @Vector(3, f32) = .{ 0.0, 50.0, 100.0 };
     const b: @Vector(3, f32) = .{ 100.0, 0.0, 200.0 };
-    try expectEqual(@Vector(3, f32){ 0.0, 50.0, 100.0 }, lerpClamped(a, b, @as(ct, -1.0)));
-    try expectEqual(@Vector(3, f32){ 0.0, 50.0, 100.0 }, lerpClamped(a, b, @as(ct, 0.0)));
+    try expectEqual(@Vector(3, f32){ 0.0, 50.0, 100.0 }, lerpClamped(a, b, @as(ctf, -1.0)));
+    try expectEqual(@Vector(3, f32){ 0.0, 50.0, 100.0 }, lerpClamped(a, b, @as(ctf, 0.0)));
     try expectEqual(@Vector(3, f32){ 50.0, 25.0, 150.0 }, lerpClamped(a, b, @as(f32, 0.5)));
     try expectEqual(@Vector(3, f32){ 100.0, 0.0, 200.0 }, lerpClamped(a, b, @as(f32, 1)));
     try expectEqual(@Vector(3, f32){ 100.0, 0.0, 200.0 }, lerpClamped(a, b, @as(f32, 2)));
 }
 
+/// The type returned by `ilerp`.
+fn Ilerp(Start: type, End: type, Val: type) type {
+    const start: PreferFloats(Start) = undefined;
+    const end: PreferFloats(End) = undefined;
+    const val: PreferFloats(Val) = undefined;
+    return @TypeOf(start, end, val);
+}
+
 /// Inverse linear interpolation, gives exact results at 0 and 1.
 ///
-/// Only supports floats.
-pub fn ilerp(start: anytype, end: anytype, val: anytype) @TypeOf(start, end, val) {
-    const Type = @TypeOf(start, end, val);
+/// Only supports floats, and comptime ints which are coerced to comptime floats.
+pub fn ilerp(
+    start: anytype,
+    end: anytype,
+    val: anytype,
+) Ilerp(@TypeOf(start), @TypeOf(end), @TypeOf(val)) {
+    const Type = Ilerp(@TypeOf(start), @TypeOf(end), @TypeOf(val));
     comptime assert(@typeInfo(Type) == .float or @typeInfo(Type) == .comptime_float);
-    return (val - start) / (end - start);
+    return (@as(Type, val) - @as(Type, start)) / (@as(Type, end) - @as(Type, start));
 }
 
 test ilerp {
@@ -188,6 +229,15 @@ test ilerp {
     try std.testing.expectEqual(0.5, ilerp(50.0, 100.0, 75.0));
     try std.testing.expectEqual(1.0, ilerp(50.0, 100.0, 100.0));
     try std.testing.expectEqual(2.0, ilerp(50.0, 100.0, 150.0));
+
+    // Make sure comptime ints can coerce to comptime floats
+    try std.testing.expectEqual(-1.0, ilerp(50, 100.0, 0.0));
+    try std.testing.expectEqual(-1.0, ilerp(50.0, 100, 0.0));
+    try std.testing.expectEqual(-1.0, ilerp(50.0, 100.0, 0));
+    try std.testing.expectEqual(-1.0, ilerp(50, 100, 0.0));
+    try std.testing.expectEqual(-1.0, ilerp(50, 100.0, 0));
+    try std.testing.expectEqual(-1.0, ilerp(50.0, 100, 0));
+    try std.testing.expectEqual(-1.0, ilerp(50, 100, 0));
 }
 
 /// Similar to `ilerp`, but clamps the result to [0, 1].
@@ -203,6 +253,17 @@ test ilerpClamped {
     try std.testing.expectEqual(1.0, ilerpClamped(50.0, 100.0, 150.0));
 }
 
+fn Remap(
+    InStart: type,
+    InEnd: type,
+    OutStart: type,
+    OutEnd: type,
+    Val: type,
+) type {
+    const T = Ilerp(InStart, InEnd, Val);
+    return Lerp(OutStart, OutEnd, T);
+}
+
 /// Remaps a value from the start range into the end range.
 ///
 /// Only supports floats.
@@ -212,7 +273,13 @@ pub fn remap(
     out_start: anytype,
     out_end: anytype,
     val: anytype,
-) @TypeOf(in_start, in_end, out_start, out_end, val) {
+) Remap(
+    @TypeOf(in_start),
+    @TypeOf(in_end),
+    @TypeOf(out_start),
+    @TypeOf(out_end),
+    @TypeOf(val),
+) {
     const t = ilerp(in_start, in_end, val);
     return lerp(out_start, out_end, t);
 }
@@ -225,6 +292,32 @@ test remap {
     try std.testing.expectEqual(50.0, remap(10.0, 20.0, 50.0, 100.0, 10.0));
     try std.testing.expectEqual(100.0, remap(10.0, 20.0, 50.0, 100.0, 20.0));
     try std.testing.expectEqual(75.0, remap(10.0, 20.0, 50.0, 100.0, 15.0));
+
+    // Check types
+    const f32_0: f32 = 0;
+    const f64_0: f64 = 0;
+    const ctf_0: comptime_float = 0;
+    const cti_0: comptime_int = 0;
+
+    try std.testing.expectEqual(f32, @TypeOf(remap(f32_0, f32_0, f32_0, f32_0, f32_0)));
+    try std.testing.expectEqual(f64, @TypeOf(remap(f64_0, f32_0, f32_0, f32_0, f32_0)));
+    try std.testing.expectEqual(f64, @TypeOf(remap(f32_0, f64_0, f32_0, f32_0, f32_0)));
+    try std.testing.expectEqual(f64, @TypeOf(remap(f32_0, f32_0, f64_0, f32_0, f32_0)));
+    try std.testing.expectEqual(f64, @TypeOf(remap(f32_0, f32_0, f32_0, f64_0, f32_0)));
+    try std.testing.expectEqual(f64, @TypeOf(remap(f32_0, f32_0, f32_0, f32_0, f64_0)));
+
+    try std.testing.expectEqual(f32, @TypeOf(remap(ctf_0, f32_0, f32_0, f32_0, f32_0)));
+    try std.testing.expectEqual(f32, @TypeOf(remap(f32_0, ctf_0, f32_0, f32_0, f32_0)));
+    try std.testing.expectEqual(f32, @TypeOf(remap(f32_0, f32_0, ctf_0, f32_0, f32_0)));
+    try std.testing.expectEqual(f32, @TypeOf(remap(f32_0, f32_0, f32_0, ctf_0, f32_0)));
+    try std.testing.expectEqual(f32, @TypeOf(remap(f32_0, f32_0, f32_0, f32_0, ctf_0)));
+    try std.testing.expectEqual(comptime_float, @TypeOf(remap(ctf_0, ctf_0, ctf_0, ctf_0, ctf_0)));
+
+    try std.testing.expectEqual(f32, @TypeOf(remap(cti_0, f32_0, f32_0, f32_0, f32_0)));
+    try std.testing.expectEqual(f32, @TypeOf(remap(f32_0, cti_0, f32_0, f32_0, f32_0)));
+    try std.testing.expectEqual(f32, @TypeOf(remap(f32_0, f32_0, cti_0, f32_0, f32_0)));
+    try std.testing.expectEqual(f32, @TypeOf(remap(f32_0, f32_0, f32_0, cti_0, f32_0)));
+    try std.testing.expectEqual(f32, @TypeOf(remap(f32_0, f32_0, f32_0, f32_0, cti_0)));
 }
 
 /// Similar to `remap`, but the results are clamped to [start, end].
