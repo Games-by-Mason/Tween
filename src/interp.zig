@@ -93,13 +93,15 @@ test lerp {
         try expectEqual(@as(ct, 0), lerp(@as(ct, 0), @as(ct, 0), @as(ct, 0)));
     }
 
-    // Vectors
+    // Vectors, and checking for lack of clamping
     {
         const a: @Vector(3, f32) = .{ 0.0, 50.0, 100.0 };
         const b: @Vector(3, f32) = .{ 100.0, 0.0, 200.0 };
+        try expectEqual(@Vector(3, f32){ -100.0, 100.0, 0.0 }, lerp(a, b, @as(ct, -1.0)));
         try expectEqual(@Vector(3, f32){ 0.0, 50.0, 100.0 }, lerp(a, b, @as(ct, 0.0)));
         try expectEqual(@Vector(3, f32){ 50.0, 25.0, 150.0 }, lerp(a, b, @as(f32, 0.5)));
         try expectEqual(@Vector(3, f32){ 100.0, 0.0, 200.0 }, lerp(a, b, @as(f32, 1)));
+        try expectEqual(@Vector(3, f32){ 200.0, -50.0, 300.0 }, lerp(a, b, @as(ct, 2.0)));
     }
 
     // Vector types
@@ -150,6 +152,27 @@ test lerp {
     }
 }
 
+/// Similar to `lerp`, but `t` is clamped to [0, 1].
+pub fn lerpClamped(
+    start: anytype,
+    end: anytype,
+    t: anytype,
+) @TypeOf(lerp(start, end, t)) {
+    return lerp(start, end, clamp01(t));
+}
+
+test lerpClamped {
+    const expectEqual = std.testing.expectEqual;
+    const ct = comptime_float;
+    const a: @Vector(3, f32) = .{ 0.0, 50.0, 100.0 };
+    const b: @Vector(3, f32) = .{ 100.0, 0.0, 200.0 };
+    try expectEqual(@Vector(3, f32){ 0.0, 50.0, 100.0 }, lerpClamped(a, b, @as(ct, -1.0)));
+    try expectEqual(@Vector(3, f32){ 0.0, 50.0, 100.0 }, lerpClamped(a, b, @as(ct, 0.0)));
+    try expectEqual(@Vector(3, f32){ 50.0, 25.0, 150.0 }, lerpClamped(a, b, @as(f32, 0.5)));
+    try expectEqual(@Vector(3, f32){ 100.0, 0.0, 200.0 }, lerpClamped(a, b, @as(f32, 1)));
+    try expectEqual(@Vector(3, f32){ 100.0, 0.0, 200.0 }, lerpClamped(a, b, @as(f32, 2)));
+}
+
 /// Inverse linear interpolation, gives exact results at 0 and 1.
 ///
 /// Only supports floats.
@@ -160,20 +183,24 @@ pub fn ilerp(start: anytype, end: anytype, val: anytype) @TypeOf(start, end, val
 }
 
 test ilerp {
+    try std.testing.expectEqual(-1.0, ilerp(50.0, 100.0, 0.0));
     try std.testing.expectEqual(0.0, ilerp(50.0, 100.0, 50.0));
-    try std.testing.expectEqual(1.0, ilerp(50.0, 100.0, 100.0));
     try std.testing.expectEqual(0.5, ilerp(50.0, 100.0, 75.0));
+    try std.testing.expectEqual(1.0, ilerp(50.0, 100.0, 100.0));
+    try std.testing.expectEqual(2.0, ilerp(50.0, 100.0, 150.0));
 }
 
-/// Clamps a value between 0 and 1.
-pub fn clamp01(val: anytype) @TypeOf(val) {
-    return @max(0.0, @min(1.0, val));
+/// Similar to `ilerp`, but clamps the result to [0, 1].
+pub fn ilerpClamped(start: anytype, end: anytype, val: anytype) @TypeOf(ilerp(start, end, val)) {
+    return clamp01(ilerp(start, end, val));
 }
 
-test clamp01 {
-    try std.testing.expectEqual(0.0, clamp01(-1.0));
-    try std.testing.expectEqual(1.0, clamp01(10.0));
-    try std.testing.expectEqual(0.5, clamp01(0.5));
+test ilerpClamped {
+    try std.testing.expectEqual(0.0, ilerpClamped(50.0, 100.0, 0.0));
+    try std.testing.expectEqual(0.0, ilerpClamped(50.0, 100.0, 50.0));
+    try std.testing.expectEqual(0.5, ilerpClamped(50.0, 100.0, 75.0));
+    try std.testing.expectEqual(1.0, ilerpClamped(50.0, 100.0, 100.0));
+    try std.testing.expectEqual(1.0, ilerpClamped(50.0, 100.0, 150.0));
 }
 
 /// Remaps a value from the start range into the end range.
@@ -191,9 +218,46 @@ pub fn remap(
 }
 
 test remap {
+    try std.testing.expectEqual(0.0, remap(10.0, 20.0, 50.0, 100.0, 0.0));
+    try std.testing.expectEqual(150.0, remap(10.0, 20.0, 50.0, 100.0, 30.0));
+
+    try std.testing.expectEqual(50.0, remap(10.0, 20.0, 50.0, 100.0, 10.0));
     try std.testing.expectEqual(50.0, remap(10.0, 20.0, 50.0, 100.0, 10.0));
     try std.testing.expectEqual(100.0, remap(10.0, 20.0, 50.0, 100.0, 20.0));
     try std.testing.expectEqual(75.0, remap(10.0, 20.0, 50.0, 100.0, 15.0));
+}
+
+/// Similar to `remap`, but the results are clamped to [start, end].
+pub fn remapClamped(
+    in_start: anytype,
+    in_end: anytype,
+    out_start: anytype,
+    out_end: anytype,
+    val: anytype,
+) @TypeOf(in_start, in_end, out_start, out_end, val) {
+    const t = ilerp(in_start, in_end, val);
+    return lerpClamped(out_start, out_end, t);
+}
+
+test remapClamped {
+    try std.testing.expectEqual(50.0, remapClamped(10.0, 20.0, 50.0, 100.0, 0.0));
+    try std.testing.expectEqual(100.0, remapClamped(10.0, 20.0, 50.0, 100.0, 30.0));
+
+    try std.testing.expectEqual(50.0, remapClamped(10.0, 20.0, 50.0, 100.0, 10.0));
+    try std.testing.expectEqual(50.0, remapClamped(10.0, 20.0, 50.0, 100.0, 10.0));
+    try std.testing.expectEqual(100.0, remapClamped(10.0, 20.0, 50.0, 100.0, 20.0));
+    try std.testing.expectEqual(75.0, remapClamped(10.0, 20.0, 50.0, 100.0, 15.0));
+}
+
+/// Clamps a value between 0 and 1.
+pub fn clamp01(val: anytype) @TypeOf(val) {
+    return @max(0.0, @min(1.0, val));
+}
+
+test clamp01 {
+    try std.testing.expectEqual(0.0, clamp01(-1.0));
+    try std.testing.expectEqual(1.0, clamp01(10.0));
+    try std.testing.expectEqual(0.5, clamp01(0.5));
 }
 
 /// Processes a delta time value to make it usable as the `t` argument to lerp.
