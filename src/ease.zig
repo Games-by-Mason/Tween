@@ -15,7 +15,7 @@ pub fn linear(t: anytype) @TypeOf(t) {
 test linear {
     try std.testing.expectEqual(0.0, linear(@as(f32, 0.0)));
     try std.testing.expectEqual(0.5, linear(@as(f32, 0.5)));
-    try std.testing.expectEqual(0.0, linear(@as(f32, 0.0)));
+    try std.testing.expectEqual(1.0, linear(@as(f32, 1.0)));
 }
 
 /// Easing that follows a sine curve.
@@ -555,7 +555,7 @@ test step {
     const exc: StepOptions = .{ .count = 2 };
     try std.testing.expectEqual(@as(f32, 0.0), step(@as(f32, -0.1), exc));
     try std.testing.expectEqual(@as(f32, 1.0 / 3.0), step(@as(f32, 0.0), exc));
-    try std.testing.expectEqual(@as(f32, 1.0 / 3.0), step(@as(f32, 0.0), exc));
+    try std.testing.expectEqual(@as(f32, 1.0 / 3.0), step(@as(f32, 0.1), exc));
     try std.testing.expectEqual(@as(f32, 1.0 / 3.0), step(@as(f32, 0.4), exc));
     try std.testing.expectEqual(@as(f32, 2.0 / 3.0), step(@as(f32, 0.5), exc));
     try std.testing.expectEqual(@as(f32, 2.0 / 3.0), step(@as(f32, 0.7), exc));
