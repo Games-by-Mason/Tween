@@ -1,4 +1,8 @@
 //! Commonly used easing styles, to be applied to the `t` value of a linear interpolation.
+//!
+//! These methods are kept in sync with:
+//!
+//! https://github.com/Games-by-Mason/gbms/
 
 const std = @import("std");
 const tween = @import("root.zig");
@@ -143,7 +147,8 @@ test cubicInOut {
 
 /// Quartic easing.
 pub fn quartIn(t: anytype) @TypeOf(t) {
-    return t * t * t * t;
+    const t2 = t * t;
+    return t2 * t2;
 }
 
 test quartIn {
@@ -170,7 +175,8 @@ test quartOut {
 pub fn quartInOut(t: anytype) @TypeOf(t) {
     const T = @TypeOf(t);
     if (t < 0.5) {
-        return 8 * t * t * t * t;
+        const t2 = t * t;
+        return 8 * t2 * t2;
     } else {
         const q = @mulAdd(T, -2.0, t, 2.0);
         return @mulAdd(T, -q / 2.0, q * q * q, 1.0);
@@ -187,7 +193,8 @@ test quartInOut {
 
 /// Quintic easing.
 pub fn quintIn(t: anytype) @TypeOf(t) {
-    return t * t * t * t * t;
+    const t2 = t * t;
+    return t2 * t2 * t;
 }
 
 test quintIn {
@@ -214,7 +221,8 @@ test quintOut {
 pub fn quintInOut(t: anytype) @TypeOf(t) {
     const T = @TypeOf(t);
     if (t < 0.5) {
-        return 16 * t * t * t * t * t;
+        const t2 = t * t;
+        return 16 * t2 * t2 * t;
     } else {
         const q = @mulAdd(T, -2.0, t, 2.0);
         return @mulAdd(T, -q * q / 2.0, q * q * q, 1.0);

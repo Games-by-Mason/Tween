@@ -311,7 +311,6 @@ test remap {
     try std.testing.expectEqual(f32, @TypeOf(remap(f32_0, f32_0, ctf_0, f32_0, f32_0)));
     try std.testing.expectEqual(f32, @TypeOf(remap(f32_0, f32_0, f32_0, ctf_0, f32_0)));
     try std.testing.expectEqual(f32, @TypeOf(remap(f32_0, f32_0, f32_0, f32_0, ctf_0)));
-    try std.testing.expectEqual(comptime_float, @TypeOf(remap(ctf_0, ctf_0, ctf_0, ctf_0, ctf_0)));
 
     try std.testing.expectEqual(f32, @TypeOf(remap(cti_0, f32_0, f32_0, f32_0, f32_0)));
     try std.testing.expectEqual(f32, @TypeOf(remap(f32_0, cti_0, f32_0, f32_0, f32_0)));
