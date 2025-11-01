@@ -212,23 +212,47 @@ fn Ilerp(Start: type, End: type, Val: type) type {
 
 /// Inverse linear interpolation, gives exact results at 0 and 1.
 ///
-/// Only supports floats, and comptime ints which are coerced to comptime floats.
+/// Supports the same types as `lerp`, types with multiple components are computed componentwise.
 pub fn ilerp(
     start: anytype,
     end: anytype,
     val: anytype,
 ) Ilerp(@TypeOf(start), @TypeOf(end), @TypeOf(val)) {
     const Type = Ilerp(@TypeOf(start), @TypeOf(end), @TypeOf(val));
-    comptime assert(@typeInfo(Type) == .float or @typeInfo(Type) == .comptime_float);
-    return (@as(Type, val) - @as(Type, start)) / (@as(Type, end) - @as(Type, start));
+    // comptime assert(@typeInfo(Type) == .float or @typeInfo(Type) == .comptime_float);
+    switch (@typeInfo(Type)) {
+        .float, .comptime_float, .vector => {
+            return (@as(Type, val) - @as(Type, start)) / (@as(Type, end) - @as(Type, start));
+        },
+        .@"struct" => |info| {
+            var result: Type = undefined;
+            inline for (info.fields) |field| {
+                @field(result, field.name) = ilerp(
+                    @field(start, field.name),
+                    @field(end, field.name),
+                    @field(val, field.name),
+                );
+            }
+            return result;
+        },
+        .array => {
+            var result: Type = undefined;
+            for (&result, start, end, val) |*dest, a, b, t| {
+                dest.* = ilerp(a, b, t);
+            }
+            return result;
+        },
+        else => comptime unreachable,
+    }
 }
 
 test ilerp {
+    // Floats
     try std.testing.expectEqual(-1.0, ilerp(50.0, 100.0, 0.0));
-    try std.testing.expectEqual(0.0, ilerp(50.0, 100.0, 50.0));
-    try std.testing.expectEqual(0.5, ilerp(50.0, 100.0, 75.0));
-    try std.testing.expectEqual(1.0, ilerp(50.0, 100.0, 100.0));
-    try std.testing.expectEqual(2.0, ilerp(50.0, 100.0, 150.0));
+    try std.testing.expectEqual(@as(f32, 0.0), ilerp(50.0, 100.0, 50.0));
+    try std.testing.expectEqual(0.5, ilerp(@as(f32, 50.0), 100.0, 75.0));
+    try std.testing.expectEqual(1.0, ilerp(50.0, @as(f32, 100.0), 100.0));
+    try std.testing.expectEqual(2.0, ilerp(50.0, 100.0, @as(f32, 150.0)));
 
     // Make sure comptime ints can coerce to comptime floats
     try std.testing.expectEqual(-1.0, ilerp(50, 100.0, 0.0));
@@ -238,6 +262,42 @@ test ilerp {
     try std.testing.expectEqual(-1.0, ilerp(50, 100.0, 0));
     try std.testing.expectEqual(-1.0, ilerp(50.0, 100, 0));
     try std.testing.expectEqual(-1.0, ilerp(50, 100, 0));
+
+    // Vectors
+    {
+        const Vec2 = @Vector(2, f32);
+        try std.testing.expectEqual(
+            Vec2{ -1.0, 0.5 },
+            ilerp(Vec2{ 50, 0 }, Vec2{ 100, 100 }, Vec2{ 0, 50 }),
+        );
+    }
+
+    // Structs
+    {
+        const Vec2 = struct { x: f32, y: f32 };
+        try std.testing.expectEqual(
+            Vec2{ .x = -1.0, .y = 0.5 },
+            ilerp(Vec2{ .x = 50, .y = 0 }, Vec2{ .x = 100, .y = 100 }, Vec2{ .x = 0, .y = 50 }),
+        );
+    }
+
+    // Tuples
+    {
+        const Vec2 = struct { f32, f32 };
+        try std.testing.expectEqual(
+            Vec2{ -1.0, 0.5 },
+            ilerp(Vec2{ 50, 0 }, Vec2{ 100, 100 }, Vec2{ 0, 50 }),
+        );
+    }
+
+    // Arrays
+    {
+        const Vec2 = [2]f32;
+        try std.testing.expectEqual(
+            Vec2{ -1.0, 0.5 },
+            ilerp(Vec2{ 50, 0 }, Vec2{ 100, 100 }, Vec2{ 0, 50 }),
+        );
+    }
 }
 
 /// Similar to `ilerp`, but clamps the result to [0, 1].
@@ -266,7 +326,7 @@ fn Remap(
 
 /// Remaps a value from the start range into the end range.
 ///
-/// Only supports floats.
+/// Supports the same types as `lerp`, types with multiple components are computed componentwise.
 pub fn remap(
     in_start: anytype,
     in_end: anytype,
@@ -280,8 +340,42 @@ pub fn remap(
     @TypeOf(out_end),
     @TypeOf(val),
 ) {
+    const Type = Remap(
+        @TypeOf(in_start),
+        @TypeOf(in_end),
+        @TypeOf(out_start),
+        @TypeOf(out_end),
+        @TypeOf(val),
+    );
     const t = ilerp(in_start, in_end, val);
-    return lerp(out_start, out_end, t);
+    switch (@typeInfo(Type)) {
+        .float, .comptime_float => return lerp(out_start, out_end, t),
+        .vector => return @mulAdd(
+            Type,
+            out_start,
+            @as(Type, @splat(1.0)) - t,
+            @as(Type, out_end) * @as(Type, t),
+        ),
+        .@"struct" => |info| {
+            var result: Type = undefined;
+            inline for (info.fields) |field| {
+                @field(result, field.name) = lerp(
+                    @field(out_start, field.name),
+                    @field(out_end, field.name),
+                    @field(t, field.name),
+                );
+            }
+            return result;
+        },
+        .array => {
+            var result: Type = undefined;
+            for (&result, out_start, out_end, t) |*dest, start_field, end_field, t_field| {
+                dest.* = lerp(start_field, end_field, t_field);
+            }
+            return result;
+        },
+        else => comptime unreachable,
+    }
 }
 
 test remap {
@@ -293,7 +387,7 @@ test remap {
     try std.testing.expectEqual(100.0, remap(10.0, 20.0, 50.0, 100.0, 20.0));
     try std.testing.expectEqual(75.0, remap(10.0, 20.0, 50.0, 100.0, 15.0));
 
-    // Check types
+    // Check scalar types
     const f32_0: f32 = 0;
     const f64_0: f64 = 0;
     const ctf_0: comptime_float = 0;
@@ -317,6 +411,42 @@ test remap {
     try std.testing.expectEqual(f32, @TypeOf(remap(f32_0, f32_0, cti_0, f32_0, f32_0)));
     try std.testing.expectEqual(f32, @TypeOf(remap(f32_0, f32_0, f32_0, cti_0, f32_0)));
     try std.testing.expectEqual(f32, @TypeOf(remap(f32_0, f32_0, f32_0, f32_0, cti_0)));
+
+    // Vectors
+    {
+        const Vec2 = @Vector(2, f32);
+        try std.testing.expectEqual(
+            Vec2{ 1, 0 },
+            remap(Vec2{ -1, 0 }, Vec2{ 1, 2 }, Vec2{ 0, -1 }, Vec2{ 2, 1 }, Vec2{ 0, 1 }),
+        );
+    }
+
+    // Structs
+    {
+        const Vec2 = struct { x: f32, y: f32 };
+        try std.testing.expectEqual(
+            Vec2{ .x = 1, .y = 0 },
+            remap(Vec2{ .x = -1, .y = 0 }, Vec2{ .x = 1, .y = 2 }, Vec2{ .x = 0, .y = -1 }, Vec2{ .x = 2, .y = 1 }, Vec2{ .x = 0, .y = 1 }),
+        );
+    }
+
+    // Tuples
+    {
+        const Vec2 = struct { f32, f32 };
+        try std.testing.expectEqual(
+            Vec2{ 1, 0 },
+            remap(Vec2{ -1, 0 }, Vec2{ 1, 2 }, Vec2{ 0, -1 }, Vec2{ 2, 1 }, Vec2{ 0, 1 }),
+        );
+    }
+
+    // Arrays
+    {
+        const Vec2 = [2]f32;
+        try std.testing.expectEqual(
+            Vec2{ 1, 0 },
+            remap(Vec2{ -1, 0 }, Vec2{ 1, 2 }, Vec2{ 0, -1 }, Vec2{ 2, 1 }, Vec2{ 0, 1 }),
+        );
+    }
 }
 
 /// Similar to `remap`, but the results are clamped to [start, end].
@@ -362,7 +492,7 @@ test clamp01 {
 /// independent lerp.
 ///
 /// The smoothing parameter ranges from zero to one, higher values result in more smoothing. In
-/// particular, the smoothing value is appropriately equivalent to the distance from t = 1 the
+/// particular, the smoothing value is approximately equivalent to the distance from t = 1 the
 /// return value will be for a delta time of one.
 ///
 /// A nice write up elaborating on this concept can be found here:
