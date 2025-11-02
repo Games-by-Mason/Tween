@@ -219,7 +219,6 @@ pub fn ilerp(
     val: anytype,
 ) Ilerp(@TypeOf(start), @TypeOf(end), @TypeOf(val)) {
     const Type = Ilerp(@TypeOf(start), @TypeOf(end), @TypeOf(val));
-    // comptime assert(@typeInfo(Type) == .float or @typeInfo(Type) == .comptime_float);
     switch (@typeInfo(Type)) {
         .float, .comptime_float, .vector => {
             return (@as(Type, val) - @as(Type, start)) / (@as(Type, end) - @as(Type, start));
