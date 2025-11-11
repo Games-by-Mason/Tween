@@ -1,4 +1,7 @@
-//! Helpers for working with various interpolation schemes.
+//! Helpers for working with various interpolation schemes. If you're unfamiliar with this class of
+//! functions, I recommend viewing
+//! [The Simple Yet Powerful Math We Don't Talk About](https://www.youtube.com/watch?v=NzjF1pdlK7Y)
+//! by [Freya Holmer](https://www.acegikmo.com/).
 
 const std = @import("std");
 const geom = @import("root.zig");
@@ -25,7 +28,8 @@ fn Lerp(Start: type, End: type, T: type) type {
     }
 }
 
-/// Linear interpolation, exact results at `0` and `1`.
+/// Linear interpolation, exact results at `0` and `1`. As such, the result will *not* necessarily
+/// match `std.lerp`.
 ///
 /// Supports floats, vectors of floats, and structs or arrays that only contain other supported
 /// types. Comptime ints are coerced to comptime floats.

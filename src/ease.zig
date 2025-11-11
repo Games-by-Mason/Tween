@@ -1,8 +1,20 @@
-//! Commonly used easing styles, to be applied to the `t` value of a linear interpolation.
+//! Commonly used easing styles, to be applied to the `t` value of a linear interpolation. You can
+//! find good visualizations of many of these functions [here](https://easings.net/), though the
+//! implementations may not always be exact matches.
 //!
-//! These methods are kept in sync with:
+//! All implementations are exact at 0 and 1 for 32 bit floats unless otherwise noted.
 //!
-//! https://github.com/Games-by-Mason/gbms/
+//! If you're new to easing and not sure which to use, `smootherstep` is a reasonable default to
+//! slap on everything to start. When designing your own easing functions, I highly recommend
+//! testing them in [Desmos](https://www.desmos.com/calculator).
+//!
+//! These methods are kept in sync with [gbms](https://github.com/Games-by-Mason/gbms/).
+//!
+//! If you're shipping binaries, you probably have a min spec CPU in mind. I recommend making sure
+//! `muladd` is enabled for your baseline so it doesn't end up getting emulated in software,
+//! [more info here](https://gamesbymason.com/devlog/2025/#muladd). On x86 this means enabling
+//! `fma`, on arm/aarch64 this means enabling either `neon` or `vfp4`.
+
 
 const std = @import("std");
 const tween = @import("root.zig");
