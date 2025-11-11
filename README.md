@@ -13,6 +13,10 @@ const ease = tween.ease;
 pos = lerp(start, end, ease.bounceOut(t));
 ```
 
+## Documentation
+
+Full documentation available [here](https://docs.gamesbymason.com/tween/), you can generate up to date docs yourself with `zig build docs`.
+
 ## Interpolation
 
 The following interpolation functions are provided:
